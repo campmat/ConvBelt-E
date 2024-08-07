@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nastavitve</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <a href="/">Domov</a>
+        <a href="/nastavitve">Nastavitve</a>
+    </header>
+    <div>
+        <div class="container">
+            <div>
+                <h1>Kamera</h1>
+                <div class="imageHolder">
+                    <img id="cameraUneditedImage" src="{{ url_for('camera_unedited') }}" width="640" height="480">
+                    <canvas id="cameraUneditedCanvas" width="640" height="480"></canvas>
+                </div>
+            </div>
+            <div>
+                <h1>Kamera - odrezana</h1>
+                <img src="{{ url_for('camera_cut') }}">
+            </div>
+        </div>
+        <div class="container">
+            <div class="settingsHolder">
+                <label>Razdalja središče slike in robot[mm]:</label><input type="range" min="0" max="1000" id="distanceCameraRobotRange" onchange="distanceCameraRobotRangeChange()"><input type="number" id="distanceCameraRobotNumber" onchange="distanceCameraRobotNumberChange()">
+                <label>Širina slike [mm]:</label><input type="range" min="0" max="1000" id="pictureWidthRange" onchange="pictureWidthRangeChange()"><input type="number" id="pictureWidthNumber" onchange="pictureWidthNumberChange()">
+                <label>Širina držala [mm]:</label><input type="range" min="0" max="1000" id="holderWidthRange" onchange="holderWidthRangeChange()"><input type="number" id="holderWidthNumber" onchange="holderWidthNumberChange()">
+            </div>
+            <div class="settingsHolder">
+                <label>IP Robota:</label><input type="text" id="robotIPinput" onchange="robotIPchange()">
+                <label>Robot statusni register:</label><input type="number" id="robotStatusInput" onchange="robotStatusRegChange()">
+                <label>Robot register levega aktuatorja:</label><input type="number" id="robotLeftArmInput" onchange="robotLeftArmChange()">
+                <label>Robot register desnega aktuatorja:</label><input type="number" id="robotRightArmInput" onchange="robotRightArmChange()">
+            </div>
+            <div class="settingsHolder">
+                <label>Svetlost kamere:</label><input type="range" min="0" max="255" id="cameraBrightnessRange" onchange="cameraBrightnessRangeChange()"><input type="number" min="0" max="255" id="cameraBrightnessNumber"  onchange="cameraBrightnessNumberChange()">
+                <label>Kontrast kamere:</label><input type="range" min="0" max="255" id="cameraContrastRange" onchange="cameraContrastRangeChange()"><input type="number" min="0" max="255" id="cameraContrastNumber" onchange="cameraContrastNumberChange()">
+            </div>
+            <div class="settingsHolder">
+                <label>Hitrost traku:</label><input type="number" id="conveyorSpeedInput" onchange="conveyorSpeedChange()">
+                <button onclick="startRecordingConveyorSpeed()">Začni meriti hitrost traku!</button>
+                <button onclick="stopRecordingConveyorSpeed()">Zaključi meriti hitrost traku!</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let handleRadius = 5;
+        let dragTopLeft = false;
+        let dragBottomRight = false;
+        const canvasOffset = 10;
+
+        let xmin = 276;
+        let xmax = 513;
+        let ymin = 0;
+        let ymax = 480;
+
+        let distance_camera_center_robot_center = 400;
+        let picture_width_mm = 290;
+        let w_holder = 62;
+
+        let ROBOT_IP = "192.168.1.30";
+        let ROBOT_STATUS = 42;
+        let ROBOT_LEFTARM = 43;
+        let ROBOT_RIGHTARM = 44;
+
+        let CAP_PROP_BRIGHTNESS = 150;
+        let CAP_PROP_CONTRAST = 200;
+
+        let conveyor_speed = 50;
+
+        const cameraUneditedImage = document.getElementById("cameraUneditedImage");
+        const cameraUneditedCanvas = document.getElementById("cameraUneditedCanvas");
+        const cameraUneditedCtx = cameraUneditedCanvas.getContext("2d");
+
+        const distanceCameraRobotRange = document.getElementById("distanceCameraRobotRange");
+        const distanceCameraRobotNumber = document.getElementById("distanceCameraRobotNumber");
+
+        const pictureWidthRange = document.getElementById("pictureWidthRange");
+        const pictureWidthNumber = document.getElementById("pictureWidthNumber");
+
+        const holderWidthRange = document.getElementById("holderWidthRange");
+        const holderWidthNumber = document.getElementById("holderWidthNumber");
+
+        const robotIPinput = document.getElementById("robotIPinput");
+        const robotStatusInput = document.getElementById("robotStatusInput");
+        const robotLeftArmInput = document.getElementById("robotLeftArmInput");
+        const robotRightArmInput = document.getElementById("robotRightArmInput");
+
+        const cameraBrightnessRange = document.getElementById("cameraBrightnessRange");
+        const cameraBrightnessNumber = document.getElementById("cameraBrightnessNumber");
+
+        const cameraContrastRange = document.getElementById("cameraContrastRange");
+        const cameraContrastNumber = document.getElementById("cameraContrastNumber");
+
+        const conveyorSpeedInput = document.getElementById("conveyorSpeedInput");
+
+        function drawCutRectangle(){
+            cameraUneditedCtx.beginPath()
+            cameraUneditedCtx.clearRect(0, 0, cameraUneditedCanvas.width, cameraUneditedCanvas.height);
+            cameraUneditedCtx.strokeStyle = "lime";
+            cameraUneditedCtx.fillStyle = "rgba(0,0,0,0)";
+            cameraUneditedCtx.rect(xmin + canvasOffset, ymin + canvasOffset, xmax - xmin, ymax - ymin);
+            cameraUneditedCtx.stroke();
+            cameraUneditedCtx.closePath();
+
+            cameraUneditedCtx.beginPath()
+            cameraUneditedCtx.fillStyle = "lime";
+            cameraUneditedCtx.arc(xmin + canvasOffset, ymin + canvasOffset, handleRadius, 0, 2 * Math.PI);
+            cameraUneditedCtx.arc(xmax + canvasOffset, ymax + canvasOffset, handleRadius, 0, 2 * Math.PI);
+            cameraUneditedCtx.fill();
+            cameraUneditedCtx.closePath();
+        }        
+
+        function repositionCanvas(){
+            //make canvas same as image, which may have changed size and position
+            cameraUneditedCanvas.height = cameraUneditedImage.height + 2 * canvasOffset;
+            cameraUneditedCanvas.width = cameraUneditedImage.width + 2 * canvasOffset;
+            cameraUneditedCanvas.style.top = cameraUneditedImage.offsetTop - canvasOffset + "px";
+            cameraUneditedCanvas.style.left = cameraUneditedImage.offsetLeft - canvasOffset + "px";
+
+            drawCutRectangle();
+        }
+
+        function getMousePos(canvas, evt) {
+            var clx, cly
+            if (evt.type == "touchstart" || evt.type == "touchmove") {
+                clx = evt.touches[0].clientX;
+                cly = evt.touches[0].clientY;
+            } else {
+                clx = evt.clientX;
+                cly = evt.clientY;
+            }
+
+            var boundingRect = canvas.getBoundingClientRect();
+            return {
+                x: clx - boundingRect.left,
+                y: cly - boundingRect.top
+            };
+        }
+
+        function checkCloseEnough(p1, p2) {
+            return Math.abs(p1 - p2) < handleRadius;
+        }
+
+        function mouseDown(e) {
+            var pos = getMousePos(this,e);
+
+            mouseX = pos.x;
+            mouseY = pos.y;
+            
+            if (checkCloseEnough(mouseX - canvasOffset, xmin) && checkCloseEnough(mouseY - canvasOffset, ymin)) {
+                dragTopLeft = true;
+            } else if (checkCloseEnough(mouseX - canvasOffset, xmax) && checkCloseEnough(mouseY - canvasOffset, ymax)) {
+                dragBottomRight = true;
+            }
+        }
+
+        function mouseMove(e) {
+            var pos = getMousePos(this,e);
+            mouseX = pos.x;
+            mouseY = pos.y;
+
+            if (dragTopLeft) {
+                e.preventDefault();
+                e.stopPropagation();
+                xmin = mouseX - canvasOffset;
+                ymin = mouseY - canvasOffset;
+            } else if (dragBottomRight) {
+                e.preventDefault();
+                e.stopPropagation();
+                xmax = mouseX - canvasOffset;
+                ymax = mouseY - canvasOffset;
+            }
+                        
+            drawCutRectangle();
+        }
+
+        function mouseUp(e){
+            dragBottomRight = dragTopLeft = false;
+            if (ymin < 0) {
+                ymin = 0;
+            }
+            if(ymax > cameraUneditedImage.height) {
+                ymax = cameraUneditedImage.height;
+            }
+
+            data = {
+                xmin: xmin,
+                ymin: ymin,
+                xmax: xmax,
+                ymax: ymax
+            };
+
+            fetch('/set_cut_coords', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            drawCutRectangle();
+        }
+
+        function getData(){
+            fetch('/get_data')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                xmin = data.xmin;
+                ymin = data.ymin;
+                xmax = data.xmax;
+                ymax = data.ymax;
+
+                distance_camera_center_robot_center = data.distance_camera_center_robot_center;
+                picture_width_mm = data.picture_width_mm;
+                w_holder = data.w_holder;
+
+                ROBOT_IP = data.ROBOT_IP;
+                ROBOT_STATUS = data.ROBOT_STATUS;
+                ROBOT_LEFTARM = data.ROBOT_LEFTARM;
+                ROBOT_RIGHTARM = data.ROBOT_RIGHTARM;
+
+                CAP_PROP_BRIGHTNESS = data.CAP_PROP_BRIGHTNESS;
+                CAP_PROP_CONTRAST = data.CAP_PROP_CONTRAST;
+
+                conveyor_speed = data.conveyor_speed;
+
+                distanceCameraRobotNumber.value = distance_camera_center_robot_center;
+                distanceCameraRobotRange.value = distance_camera_center_robot_center;
+
+                pictureWidthNumber.value = picture_width_mm;
+                pictureWidthRange.value = picture_width_mm;
+
+                holderWidthNumber.value = w_holder;
+                holderWidthRange.value = w_holder;
+
+                robotIPinput.value = ROBOT_IP;
+                robotStatusInput.value = ROBOT_STATUS;
+                robotLeftArmInput.value = ROBOT_LEFTARM;
+                robotRightArmInput.value = ROBOT_RIGHTARM;
+
+                cameraBrightnessNumber.value = CAP_PROP_BRIGHTNESS;
+                cameraBrightnessRange.value = CAP_PROP_BRIGHTNESS;
+                cameraContrastNumber.value = CAP_PROP_CONTRAST;
+                cameraContrastRange.value = CAP_PROP_CONTRAST;
+
+                conveyorSpeedInput.value = conveyor_speed;
+            });
+        }
+
+        window.onload = () => {
+            getData();
+            repositionCanvas();
+        };
+
+        window.onresize = () => {
+            repositionCanvas();
+        };
+
+        cameraUneditedCanvas.addEventListener("mousedown", mouseDown);
+        cameraUneditedCanvas.addEventListener("mousemove", mouseMove);
+        cameraUneditedCanvas.addEventListener("mouseup", mouseUp);
+
+        function startRecordingConveyorSpeed(){
+            fetch("/start_recording_conveyor_speed");
+        }
+
+        function stopRecordingConveyorSpeed(){
+            fetch("/stop_recording_conveyor_speed")
+            .then(response => {
+                getData();
+            });
+        }
+
+        function distanceCameraRobotRangeChange() {
+            const value = distanceCameraRobotRange.value;
+            distanceCameraRobotNumber.value = value;
+            distance_camera_center_robot_center = value;
+            data = {
+                distance_camera_center_robot_center: distance_camera_center_robot_center
+            };
+
+            fetch('/set_distance_camera_center_robot_center', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function distanceCameraRobotNumberChange() {
+            const value = distanceCameraRobotNumber.value;
+            distanceCameraRobotRange.value = value;
+            distance_camera_center_robot_center = value;
+
+            data = {
+                distance_camera_center_robot_center: distance_camera_center_robot_center
+            };
+
+            fetch('/set_distance_camera_center_robot_center', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function pictureWidthRangeChange() {
+            const value = pictureWidthRange.value;
+            pictureWidthNumber.value = value;
+            picture_width_mm = value;
+
+            data = {
+                picture_width_mm: picture_width_mm
+            };
+
+            fetch('/set_picture_width_mm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function pictureWidthNumberChange() {
+            const value = pictureWidthNumber.value;
+            pictureWidthRange.value = value;
+            picture_width_mm = value;
+
+            data = {
+                picture_width_mm: picture_width_mm
+            };
+
+            fetch('/set_picture_width_mm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function holderWidthRangeChange() {
+            const value = holderWidthRange.value;
+            holderWidthNumber.value = value;
+            w_holder = value;
+
+            data = {
+                w_holder: w_holder
+            };
+
+            fetch('/set_w_holder', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function holderWidthNumberChange() {
+            const value = holderWidthNumber.value;
+            holderWidthRange.value = value;
+            w_holder = value;
+
+            data = {
+                w_holder: w_holder
+            };
+
+            fetch('/set_w_holder', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function cameraBrightnessRangeChange() {
+            const value = cameraBrightnessRange.value;
+            cameraBrightnessNumber.value = value;
+            CAP_PROP_BRIGHTNESS = value;
+
+            data = {
+                CAP_PROP_BRIGHTNESS: CAP_PROP_BRIGHTNESS
+            };
+
+            fetch('/set_CAP_PROP_BRIGHTNESS', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function cameraBrightnessNumberChange() {
+            const value = cameraBrightnessNumber.value;
+            cameraBrightnessRange.value = value;
+            CAP_PROP_BRIGHTNESS = value;
+
+            data = {
+                CAP_PROP_BRIGHTNESS: CAP_PROP_BRIGHTNESS
+            };
+
+            fetch('/set_CAP_PROP_BRIGHTNESS', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function cameraContrastRangeChange() {
+            const value = cameraContrastRange.value;
+            cameraContrastNumber.value = value;
+            CAP_PROP_CONTRAST = value;
+
+            data = {
+                CAP_PROP_CONTRAST: CAP_PROP_CONTRAST
+            };
+
+            fetch('/set_CAP_PROP_CONTRAST', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function cameraContrastNumberChange() {
+            const value = cameraContrastNumber.value;
+            cameraContrastRange.value = value;
+            CAP_PROP_CONTRAST = value;
+
+            data = {
+                CAP_PROP_CONTRAST: CAP_PROP_CONTRAST
+            };
+
+            fetch('/set_CAP_PROP_CONTRAST', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function robotIPchange() {
+            ROBOT_IP = robotIPinput.value;
+
+            data = {
+                ROBOT_IP: ROBOT_IP
+            };
+
+            fetch('/set_ROBOT_IP', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function robotStatusRegChange() {
+            ROBOT_STATUS = robotStatusInput.value;
+
+            data = {
+                ROBOT_STATUS: ROBOT_STATUS
+            };
+
+            fetch('/set_ROBOT_STATUS', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function robotLeftArmChange() {
+            ROBOT_LEFTARM = robotLeftArmInput.value;
+
+            data = {
+                ROBOT_LEFTARM: ROBOT_LEFTARM
+            };
+
+            fetch('/set_ROBOT_LEFTARM', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function robotRightArmChange() {
+            ROBOT_RIGHTARM = robotRightArmInput.value;
+
+            data = {
+                ROBOT_RIGHTARM: ROBOT_RIGHTARM
+            };
+
+            fetch('/set_ROBOT_RIGHTARM', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+
+        function conveyorSpeedChange(){
+            conveyor_speed = conveyorSpeedInput.value;
+
+            data = {
+                conveyor_speed: conveyor_speed
+            };
+
+            fetch('/set_conveyor_speed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+        }
+    </script>
+</body>
+</html>

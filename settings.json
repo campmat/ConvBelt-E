@@ -1,0 +1,17 @@
+{
+    "xmin": 278,
+    "ymin": 0,
+    "xmax": 517,
+    "ymax": 480,
+    "distance_camera_center_robot_center": 400,
+    "picture_width_mm": 290,
+    "w_holder": 62,
+    "ROBOT_IP": "192.168.1.30",
+    "ROBOT_STATUS": 42,
+    "ROBOT_LEFTARM": 43,
+    "ROBOT_RIGHTARM": 44,
+    "CAP_PROP_BRIGHTNESS": 150,
+    "CAP_PROP_CONTRAST": 200,
+    "conveyor_speed": 194.43197609157264,
+    "activatorOpenTime": 3
+}

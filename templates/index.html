@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <a href="/">Domov</a>
+        <a href="/nastavitve">Nastavitve</a>
+    </header>
+    <div class="container">
+        <div>
+            <h1>YOLO Detection</h1>
+            <img src="{{ url_for('video_feed') }}">
+        </div>
+        <div>
+            <h1>Robot Status:
+                <select id="robot_status" onchange="updateRobotStatus()">
+                    <option value="1">ROBOT WAIT</option>
+                    <option value="2">ROBOT SORT</option>
+                    <option value="3">ROBOT WAIT ACTIVATE</option>
+                    <option value="4">ROBOT ACTIVATE</option>
+                    <option value="5">ROBOT WAIT RESET</option>
+                    <option value="6">ROBOT RESET</option>
+                    <option value="7">ROBOT END</option>
+                </select></h1>
+            <h1>Tracking objects</h1>
+            <table id="detections-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Label</th>
+                        <th>Score</th>
+                        <th>Sector</th>
+                        <th>Box</th>
+                        <th>Remove</th>
+                    </tr>
+                </thead>
+                <tbody id="detections-body">
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        function fetchStatus() {
+            fetch('/robot_status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('robot_status').value = data.status;
+                });
+        }
+
+        function updateRobotStatus(){
+            const selectedStatus = document.getElementById('robot_status').value;
+            fetch('/update_robot_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: parseInt(selectedStatus) }),
+            })
+        }
+
+        function fetchDetections() {
+            fetch('/get_detections')
+                .then(response => response.json())
+                .then(data => {
+                    let detectionsBody = document.getElementById('detections-body');
+                    detectionsBody.innerHTML = ''; // Clear existing rows
+                    
+                    data.forEach(detection => {
+                        let row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${detection.id}</td>
+                            <td>${detection.label}</td>
+                            <td>${detection.score}</td>
+                            <td>${detection.sector}</td>
+                            <td>${detection.box}</td>
+                            <td><button onclick="removeDetection('${detection.id}')">Remove</button></td>
+                        `;
+                        detectionsBody.appendChild(row);
+                    });
+                });
+        }
+
+        function removeDetection(id) {
+            fetch('/remove_tracking_object', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: id}),
+            })
+        }
+
+        setInterval(fetchStatus, 1000);
+        setInterval(fetchDetections, 1000); // Refresh detections every second
+    </script>
+</body>
+</html>
